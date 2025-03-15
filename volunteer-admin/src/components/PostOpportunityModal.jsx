@@ -1,51 +1,116 @@
 import React, { useState, useEffect } from 'react';
-import { FaMapMarkerAlt, FaCalendarAlt, FaBuilding, FaUsers, FaSearch, FaClock, FaHeart, FaPlus, FaTimes } from 'react-icons/fa';
+import { FaTimes, FaMapMarkerAlt } from 'react-icons/fa';
 import axios from 'axios';
 
-const PostOpportunityModal = ({ isOpen, onClose, onSubmit }) => {
-  const [formData, setFormData] = useState({
+const PostOpportunityModal = ({ isOpen, onClose, onSubmit, initialData, isEditing }) => {
+  const initialFormState = {
     title: '',
     organization: '',
+    description: '',
     location: '',
+    address: {
+      street: '',
+      city: '',
+      district: '',
+      pincode: '',
+      state: 'Tamil Nadu'
+    },
     date: '',
     start_time: '',
     end_time: '',
-    description: '',
-    volunteers: '',
-    category: 'Environment',
     duration: '',
+    volunteers: '',
+    category: 'Community',
     skills: '',
     impact: '',
-    imageFile: null,
-    imagePreview: null
-  });
+    image: null
+  };
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [formData, setFormData] = useState(initialFormState);
+  const [imagePreview, setImagePreview] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  // Tamil Nadu districts
+  const tnDistricts = [
+    'Ariyalur', 'Chennai', 'Coimbatore', 'Cuddalore', 'Dharmapuri', 'Dindigul', 
+    'Erode', 'Kanchipuram', 'Kanyakumari', 'Karur', 'Krishnagiri', 'Madurai', 
+    'Nagapattinam', 'Namakkal', 'Nilgiris', 'Perambalur', 'Pudukkottai', 
+    'Ramanathapuram', 'Salem', 'Sivaganga', 'Thanjavur', 'Theni', 'Thoothukudi', 
+    'Tiruchirappalli', 'Tirunelveli', 'Tiruppur', 'Tiruvallur', 'Tiruvannamalai', 
+    'Tiruvarur', 'Vellore', 'Viluppuram', 'Virudhunagar'
+  ];
+
+  // Categories array
+  const categories = ['Environment', 'Education', 'Healthcare', 'Community', 'Animal Welfare'];
+
+  useEffect(() => {
+    if (initialData && isEditing) {
+      // Format the date for the input field (YYYY-MM-DD)
+      const formattedDate = initialData.date 
+        ? new Date(initialData.date).toISOString().split('T')[0]
+        : '';
+        
+      // Ensure address object exists with all required properties
+      const addressData = initialData.address || {
+        street: '',
+        city: '',
+        district: '',
+        pincode: '',
+        state: 'Tamil Nadu'
+      };
+      
+      setFormData({
+        ...initialData,
+        date: formattedDate,
+        address: addressData,
+        image: null // We don't want to pre-fill the file input
+      });
+      
+      // Set image preview if available
+      if (initialData.imageUrl) {
+        setImagePreview(initialData.imageUrl);
+      }
+    } else {
+      // Reset form when not editing
+      setFormData(initialFormState);
+      setImagePreview('');
+    }
+  }, [initialData, isEditing]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    
+    // Handle nested address fields
+    if (name.startsWith('address.')) {
+      const addressField = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        address: {
+          ...prev.address,
+          [addressField]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
-    
     if (file) {
-      // Check file size (less than 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setError('Image size must be less than 5MB');
-        return;
-      }
+      setFormData(prev => ({
+        ...prev,
+        image: file
+      }));
       
+      // Create a preview
       const reader = new FileReader();
-      reader.onload = () => {
-        setFormData({
-          ...formData,
-          imageFile: file,
-          imagePreview: reader.result
-        });
-        setError(null);
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
       };
       reader.readAsDataURL(file);
     }
@@ -53,235 +118,426 @@ const PostOpportunityModal = ({ isOpen, onClose, onSubmit }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-    
+    setError('');
+    setSubmitting(true);
+
     try {
-      const formDataToSend = new FormData();
-      
-      // Add all form fields to FormData
-      Object.keys(formData).forEach(key => {
-        if (key === 'imageFile' && formData[key]) {
-          formDataToSend.append('image', formData[key]);
-        } else if (key !== 'imagePreview' && formData[key]) {
-          formDataToSend.append(key, formData[key]);
+      if (isEditing) {
+        // If editing, check if we need to update the image
+        if (formData.image) {
+          // Create a new FormData object for the image upload
+          const imageFormData = new FormData();
+          imageFormData.append('image', formData.image);
+          
+          // Upload the new image
+          const imageResponse = await axios.post(
+            'http://localhost:5000/api/upload', 
+            imageFormData
+          );
+          
+          // Get the new image URL
+          const newImageUrl = imageResponse.data.url;
+          
+          // Update the opportunity with the new image URL
+          const updatedOpportunity = {
+            ...formData,
+            imageUrl: newImageUrl
+          };
+          
+          onSubmit(updatedOpportunity);
+        } else {
+          // If no new image, just update the other fields
+          onSubmit(formData);
         }
-      });
+      } else {
+        // If creating a new opportunity
+        const newOpportunityData = new FormData();
+        
+        // Append all form fields to the FormData
+        Object.keys(formData).forEach(key => {
+          if (key === 'image' && formData[key]) {
+            newOpportunityData.append(key, formData[key]);
+          } else if (key === 'address') {
+            // Handle nested address object
+            Object.keys(formData.address).forEach(addressKey => {
+              newOpportunityData.append(`address[${addressKey}]`, formData.address[addressKey]);
+            });
+          } else if (key !== 'image') {
+            newOpportunityData.append(key, formData[key]);
+          }
+        });
+        
+        // Make the API call
+        const response = await axios.post(
+          'http://localhost:5000/api/opportunities',
+          newOpportunityData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            }
+          }
+        );
+        
+        // Call the onSubmit function with the new opportunity
+        onSubmit(response.data);
+        
+        // Reset form
+        setFormData(initialFormState);
+        setImagePreview('');
+      }
       
-      // Send request to API
-      const response = await axios.post('http://localhost:5000/api/opportunities', formDataToSend, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      onSubmit(response.data);
+      // Close the modal
       onClose();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create opportunity');
-      console.error('Error submitting form:', err);
+      console.error('Error submitting opportunity:', err);
+      setError(err.response?.data?.error || 'Failed to submit opportunity. Please try again.');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-      <div className="bg-white rounded-xl p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
-        >
-          <FaTimes size={24} />
-        </button>
-        <h2 className="text-2xl font-bold mb-6">Post New Opportunity</h2>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center p-6 border-b">
+          <h2 className="text-2xl font-bold text-gray-900">
+            {isEditing ? 'Edit Opportunity' : 'Post New Opportunity'}
+          </h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
+          >
+            <FaTimes size={24} />
+          </button>
+        </div>
         
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
-            {error}
-          </div>
-        )}
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="p-6">
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Title *
+              </label>
               <input
                 type="text"
                 name="title"
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 value={formData.title}
                 onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., Beach Cleanup Event"
               />
             </div>
+            
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Organization</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Organization *
+              </label>
               <input
                 type="text"
                 name="organization"
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 value={formData.organization}
                 onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., Green Earth Foundation"
               />
             </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-            <input
-              type="text"
-              name="location"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              value={formData.location}
-              onChange={handleChange}
-            />
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description *
+              </label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                required
+                rows="4"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Describe the opportunity in detail..."
+              ></textarea>
+            </div>
+            
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                General Location *
+              </label>
+              <input
+                type="text"
+                name="location"
+                value={formData.location}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., Marina Beach, Chennai"
+              />
+            </div>
+            
+            {/* Address Fields */}
+            <div className="md:col-span-2">
+              <h3 className="text-lg font-medium text-gray-800 mb-2 flex items-center">
+                <FaMapMarkerAlt className="mr-2 text-blue-600" />
+                Detailed Address (Tamil Nadu)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Street Address *
+                  </label>
+                  <input
+                    type="text"
+                    name="address.street"
+                    value={formData.address.street}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="e.g., 123 Gandhi Street"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    City/Town *
+                  </label>
+                  <input
+                    type="text"
+                    name="address.city"
+                    value={formData.address.city}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="e.g., Chennai"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    District *
+                  </label>
+                  <select
+                    name="address.district"
+                    value={formData.address.district}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select District</option>
+                    {tnDistricts.map(district => (
+                      <option key={district} value={district}>{district}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Pincode *
+                  </label>
+                  <input
+                    type="text"
+                    name="address.pincode"
+                    value={formData.address.pincode}
+                    onChange={handleChange}
+                    required
+                    pattern="[0-9]{6}"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="e.g., 600001"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">6-digit pincode</p>
+                </div>
+                
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    State
+                  </label>
+                  <input
+                    type="text"
+                    name="address.state"
+                    value={formData.address.state}
+                    onChange={handleChange}
+                    disabled
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Default: Tamil Nadu</p>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Date *
+              </label>
               <input
                 type="date"
                 name="date"
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 value={formData.date}
                 onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
+            
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Start Time *
+              </label>
               <input
                 type="time"
                 name="start_time"
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 value={formData.start_time}
                 onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
+            
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                End Time *
+              </label>
               <input
                 type="time"
                 name="end_time"
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 value={formData.end_time}
                 onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-              <select
-                name="category"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                value={formData.category}
-                onChange={handleChange}
-              >
-                <option value="Environment">Environment</option>
-                <option value="Education">Education</option>
-                <option value="Healthcare">Healthcare</option>
-                <option value="Community">Community</option>
-                <option value="Animal Welfare">Animal Welfare</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Duration</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Duration (hours) *
+              </label>
               <input
-                type="text"
+                type="number"
                 name="duration"
-                required
-                placeholder="e.g., 4 hours"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 value={formData.duration}
                 onChange={handleChange}
+                required
+                min="0.25"
+                step="0.25"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., 3.5"
               />
             </div>
+            
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Volunteers Needed</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Volunteers Needed *
+              </label>
               <input
                 type="number"
                 name="volunteers"
-                required
-                min="1"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 value={formData.volunteers}
                 onChange={handleChange}
+                required
+                min="1"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., 10"
               />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Category *
+              </label>
+              <select
+                name="category"
+                value={formData.category}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                {categories.map(category => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Required Skills (comma-separated) *
+              </label>
+              <input
+                type="text"
+                name="skills"
+                value={formData.skills}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., Communication, Teamwork, Basic First Aid"
+              />
+            </div>
+            
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Impact
+              </label>
+              <input
+                type="text"
+                name="impact"
+                value={formData.impact}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., Help clean up 2 miles of beach and protect local wildlife"
+              />
+            </div>
+            
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Image {!isEditing && '*'}
+              </label>
+              <input
+                type="file"
+                name="image"
+                onChange={handleImageChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                accept="image/*"
+                required={!isEditing}
+              />
+              {imagePreview && (
+                <div className="mt-2">
+                  <img 
+                    src={imagePreview} 
+                    alt="Preview" 
+                    className="h-40 object-cover rounded-lg border border-gray-200"
+                  />
+                </div>
+              )}
+              {isEditing && !formData.image && (
+                <p className="mt-1 text-sm text-gray-500">
+                  Leave empty to keep the current image
+                </p>
+              )}
             </div>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-            <textarea
-              name="description"
-              required
-              rows={4}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              value={formData.description}
-              onChange={handleChange}
-            />
+          <div className="mt-8 flex justify-end space-x-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className={`px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-sm hover:shadow-md ${
+                submitting ? 'opacity-70 cursor-not-allowed' : ''
+              }`}
+            >
+              {submitting ? 'Submitting...' : isEditing ? 'Update Opportunity' : 'Create Opportunity'}
+            </button>
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Required Skills</label>
-            <input
-              type="text"
-              name="skills"
-              required
-              placeholder="e.g., Gardening, Physical Work, Team Player"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              value={formData.skills}
-              onChange={handleChange}
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Impact Statement</label>
-            <input
-              type="text"
-              name="impact"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              value={formData.impact}
-              onChange={handleChange}
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Upload Image (less than 5MB)</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
-            {formData.imagePreview && (
-              <div className="mt-2">
-                <img 
-                  src={formData.imagePreview} 
-                  alt="Preview" 
-                  className="h-40 object-cover rounded-lg shadow-sm"
-                />
-              </div>
-            )}
-          </div>
-          
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:bg-blue-300"
-          >
-            {loading ? 'Posting...' : 'Post Opportunity'}
-          </button>
         </form>
       </div>
     </div>
