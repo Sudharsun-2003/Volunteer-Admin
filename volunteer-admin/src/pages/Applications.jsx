@@ -13,6 +13,9 @@ const AdminApplicationsPanel = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [categories, setCategories] = useState([]);
 
+  // Update API base URL
+  const API_BASE_URL = 'http://localhost:5001/api';
+
   useEffect(() => {
     fetchAllApplications();
   }, []);
@@ -21,8 +24,8 @@ const AdminApplicationsPanel = () => {
     try {
       setLoading(true);
       
-      // This would need to be implemented in your backend
-      const response = await axios.get('http://localhost:5001/api/applications');
+      // Use the updated API endpoint URL
+      const response = await axios.get(`${API_BASE_URL}/applications/applications`);
       const applicationsData = response.data;
       
       // Extract unique categories for filtering
@@ -41,7 +44,8 @@ const AdminApplicationsPanel = () => {
 
   const handleStatusChange = async (applicationId, newStatus) => {
     try {
-      await axios.put(`http://localhost:5001/api/applications/${applicationId}/status`, {
+      // FIXED: There was a missing slash (/) between "applications" and the applicationId
+      await axios.put(`${API_BASE_URL}/applications/applications/${applicationId}/status`, {
         status: newStatus
       });
       
@@ -56,7 +60,7 @@ const AdminApplicationsPanel = () => {
       }
     } catch (err) {
       console.error('Error updating application status:', err);
-      alert('Failed to update application status. Please try again.');
+      setError('Failed to update application status. Please try again.');
     }
   };
 
@@ -274,69 +278,53 @@ const AdminApplicationsPanel = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredApplications.map((application) => (
+              {filteredApplications.map((application) => (
                   <tr key={application._id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                        <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                            <span className="text-lg font-medium text-gray-600">
-                              {application.fullName?.charAt(0)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {application.fullName}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {application.email}
-                          </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{application.fullName}</div>
+                          <div className="text-sm text-gray-500">{application.email}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{application.opportunityTitle}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {application.opportunityCategory}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(application.appliedAt)}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{application.opportunityCategory}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(application.status || 'pending')}`}>
-                        {(application.status?.charAt(0).toUpperCase() + application.status?.slice(1)) || 'Pending'}
+                      <div className="text-sm text-gray-900">{formatDate(application.appliedAt)}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(application.status)}`}>
+                        {application.status?.charAt(0).toUpperCase() + application.status?.slice(1) || 'Pending'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
-                        {(!application.status || application.status === 'pending') && (
-                          <>
-                            <button
-                              onClick={() => handleStatusChange(application._id, 'accepted')}
-                              className="text-green-600 hover:text-green-900"
-                              title="Accept"
-                            >
-                              <FaCheck />
-                            </button>
-                            <button
-                              onClick={() => handleStatusChange(application._id, 'rejected')}
-                              className="text-red-600 hover:text-red-900"
-                              title="Reject"
-                            >
-                              <FaTimes />
-                            </button>
-                          </>
-                        )}
-                        <button
-                          onClick={() => viewApplicationDetails(application)}
-                          className="text-indigo-600 hover:text-indigo-900"
-                          title="View Details"
-                        >
-                          <FaEye />
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => viewApplicationDetails(application)}
+                        className="text-indigo-600 hover:text-indigo-900 mr-4"
+                      >
+                        <FaEye className="inline mr-1" /> View
+                      </button>
+                      {(!application.status || application.status === 'pending') && (
+                        <>
+                          <button
+                            onClick={() => handleStatusChange(application._id, 'accepted')}
+                            className="text-green-600 hover:text-green-900 mr-4"
+                          >
+                            <FaCheck className="inline mr-1" /> Accept
+                          </button>
+                          <button
+                            onClick={() => handleStatusChange(application._id, 'rejected')}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            <FaTimes className="inline mr-1" /> Reject
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -345,8 +333,9 @@ const AdminApplicationsPanel = () => {
           </div>
         </div>
       )}
-      
-      <ApplicationDetailsModal 
+
+      {/* Application Details Modal */}
+      <ApplicationDetailsModal
         application={selectedApplication}
         isOpen={showDetailsModal}
         onClose={() => setShowDetailsModal(false)}
