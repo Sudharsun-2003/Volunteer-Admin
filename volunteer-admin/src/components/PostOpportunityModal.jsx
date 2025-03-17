@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaTimes, FaMapMarkerAlt } from 'react-icons/fa';
 import axios from 'axios';
 
-const PostOpportunityModal = ({ isOpen, onClose, onSubmit, initialData, isEditing }) => {
+const   PostOpportunityModal = ({ isOpen, onClose, onSubmit, initialData, isEditing }) => {
   const initialFormState = {
     title: '',
     organization: '',
@@ -131,7 +131,7 @@ const PostOpportunityModal = ({ isOpen, onClose, onSubmit, initialData, isEditin
           
           // Upload the new image
           const imageResponse = await axios.post(
-            'http://localhost:5000/api/upload', 
+            'http://localhost:5001/api/upload', 
             imageFormData
           );
           
@@ -169,7 +169,7 @@ const PostOpportunityModal = ({ isOpen, onClose, onSubmit, initialData, isEditin
         
         // Make the API call
         const response = await axios.post(
-          'http://localhost:5000/api/opportunities',
+          'http://localhost:5001/api/opportunities',
           newOpportunityData,
           {
             headers: {

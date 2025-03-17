@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 
 const Users = () => {
   const [users, setUsers] = useState([]);
@@ -6,42 +7,75 @@ const Users = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
-    role: 'volunteer',
-    status: 'active'
+    emailid: '',
+    password: '',
+    confirm_password: '',
+    district: '',
+    skill: '',
   });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // For demo purposes - replace with actual API calls
-    setUsers([
-      { id: 1, name: 'John Doe', email: 'john@example.com', role: 'volunteer', status: 'active' },
-      { id: 2, name: 'Jane Smith', email: 'jane@example.com', role: 'volunteer', status: 'inactive' },
-    ]);
+    fetchUsers();
   }, []);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (selectedUser) {
-      // Update existing user
-      setUsers(users.map(user => 
-        user.id === selectedUser.id ? { ...user, ...formData } : user
-      ));
-    } else {
-      // Add new user
-      setUsers([...users, { id: Date.now(), ...formData }]);
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get('http://localhost:5001/api/users/');
+      setUsers(response.data);
+      setError(null);
+    } catch (err) {
+      setError('Failed to fetch users');
+      console.error('Error fetching users:', err);
+    } finally {
+      setLoading(false);
     }
-    handleCloseModal();
   };
 
-  const handleDelete = (userId) => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (selectedUser) {
+        // Update existing user
+        await axios.put(`http://localhost:5001/api/users/${selectedUser._id}`, formData);
+      } else {
+        // Add new user
+        await axios.post('http://localhost:5001/api/users/register', formData);
+      }
+      fetchUsers(); // Refresh the user list
+      handleCloseModal();
+    } catch (err) {
+      console.error('Error saving user:', err);
+      alert(err.response?.data?.message || 'Failed to save user');
+    }
+  };
+
+  const handleDelete = async (userId) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
-      setUsers(users.filter(user => user.id !== userId));
+      try {
+        await axios.delete(`http://localhost:5001/api/users/${userId}`);
+        fetchUsers(); // Refresh the user list
+      } catch (err) {
+        console.error('Error deleting user:', err);
+        alert('Failed to delete user');
+      }
     }
   };
 
   const handleEdit = (user) => {
     setSelectedUser(user);
-    setFormData(user);
+    // Create a copy of user data for the form, excluding fields we don't want to edit
+    const editData = {
+      name: user.name,
+      emailid: user.emailid,
+      district: user.district || user.location, // Handle both field names
+      skill: user.skill,
+      password: '', // Reset password fields for security
+      confirm_password: '',
+    };
+    setFormData(editData);
     setIsModalOpen(true);
   };
 
@@ -50,11 +84,21 @@ const Users = () => {
     setSelectedUser(null);
     setFormData({
       name: '',
-      email: '',
-      role: 'volunteer',
-      status: 'active'
+      emailid: '',
+      password: '',
+      confirm_password: '',
+      district: '',
+      skill: '',
     });
   };
+
+  if (loading && users.length === 0) {
+    return <div className="text-center py-8">Loading users...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-8 text-red-600">{error}</div>;
+  }
 
   return (
     <div>
@@ -80,10 +124,13 @@ const Users = () => {
                 Email
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Role
+                Location
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
+                Skill
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                User ID
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
@@ -92,17 +139,12 @@ const Users = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {users.map((user) => (
-              <tr key={user.id}>
+              <tr key={user._id}>
                 <td className="px-6 py-4 whitespace-nowrap">{user.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap">{user.email}</td>
-                <td className="px-6 py-4 whitespace-nowrap capitalize">{user.role}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                    {user.status}
-                  </span>
-                </td>
+                <td className="px-6 py-4 whitespace-nowrap">{user.emailid}</td>
+                <td className="px-6 py-4 whitespace-nowrap">{user.district || user.location}</td>
+                <td className="px-6 py-4 whitespace-nowrap">{user.skill}</td>
+                <td className="px-6 py-4 whitespace-nowrap">{user.userid}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <button
                     onClick={() => handleEdit(user)}
@@ -111,7 +153,7 @@ const Users = () => {
                     Edit
                   </button>
                   <button
-                    onClick={() => handleDelete(user.id)}
+                    onClick={() => handleDelete(user._id)}
                     className="text-red-600 hover:text-red-900"
                   >
                     Delete
@@ -147,32 +189,55 @@ const Users = () => {
                   <input
                     type="email"
                     required
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    value={formData.emailid}
+                    onChange={(e) => setFormData({ ...formData, emailid: e.target.value })}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Role</label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  <label className="block text-sm font-medium text-gray-700">Location/District</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.district}
+                    onChange={(e) => setFormData({ ...formData, district: e.target.value })}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  >
-                    <option value="volunteer">Volunteer</option>
-                    <option value="admin">Admin</option>
-                  </select>
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Status</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  <label className="block text-sm font-medium text-gray-700">Skill</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.skill}
+                    onChange={(e) => setFormData({ ...formData, skill: e.target.value })}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
+                  />
+                </div>
+                {/* Password fields - only required for new users */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Password {selectedUser && '(leave blank to keep current)'}
+                  </label>
+                  <input
+                    type="password"
+                    required={!selectedUser}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Confirm Password {selectedUser && '(leave blank to keep current)'}
+                  </label>
+                  <input
+                    type="password"
+                    required={!selectedUser}
+                    value={formData.confirm_password}
+                    onChange={(e) => setFormData({ ...formData, confirm_password: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
                 </div>
               </div>
               <div className="mt-6 flex justify-end space-x-3">
@@ -198,4 +263,4 @@ const Users = () => {
   );
 };
 
-export default Users; 
+export default Users;
