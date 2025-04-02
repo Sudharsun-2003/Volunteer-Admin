@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Opportunities from './pages/Opportunities';
 import Applications from './pages/Applications';
+import AdminSignup from './pages/Signup';
 import { AuthProvider } from './context/AuthContext';
 
 function App() {
@@ -23,7 +24,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login setIsAuthenticated={setIsAuthenticated} />} />
-          
+          {/* <Route path="/signup" element={<AdminLayout setIsAuthenticated={setIsAuthenticated}/>} /> */}
           <Route
             path="/"
             element={

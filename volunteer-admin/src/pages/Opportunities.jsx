@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaMapMarkerAlt, FaCalendarAlt, FaBuilding, FaUsers, FaSearch, FaClock, FaPlus, FaEdit, FaTrash, FaHourglassHalf, FaMapPin } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaCalendarAlt, FaBuilding, FaUsers, FaSearch, FaClock, FaPlus, FaEdit, FaTrash, FaHourglassHalf, FaMapPin, FaCheckCircle, FaTimesCircle, FaUserCheck } from 'react-icons/fa';
 import axios from 'axios';
 import PostOpportunityModal from '../components/PostOpportunityModal';
 
@@ -7,6 +7,7 @@ const Opportunities = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedDistrict, setSelectedDistrict] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [opportunities, setOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,6 +18,9 @@ const Opportunities = () => {
 
   // Categories array
   const categories = ['All', 'Environment', 'Education', 'Healthcare', 'Community', 'Animal Welfare'];
+
+  // Status options
+  const statusOptions = ['All', 'Open', 'Filled', 'Completed', 'Canceled'];
 
   // Tamil Nadu districts for filtering
   const tnDistricts = [
@@ -33,12 +37,19 @@ const Opportunities = () => {
     const fetchOpportunities = async () => {
       try {
         setLoading(true);
+        console.log('Attempting to fetch opportunities...');
         const response = await axios.get('http://localhost:5001/api/opportunities');
-        setOpportunities(response.data);
-        setError(null);
+        console.log('Response received:', response);
+        if (response.data && Array.isArray(response.data)) {
+          setOpportunities(response.data);
+          setError(null);
+        } else {
+          setError('Received unexpected data format from server');
+          console.error('Unexpected data format:', response.data);
+        }
       } catch (err) {
         console.error('Error fetching opportunities:', err);
-        setError('Failed to load opportunities. Please try again later.');
+        setError(`Failed to load opportunities: ${err.message}`);
       } finally {
         setLoading(false);
       }
@@ -60,6 +71,11 @@ const Opportunities = () => {
   // Handle district filter
   const handleDistrictChange = (district) => {
     setSelectedDistrict(district);
+  };
+
+  // Handle status filter
+  const handleStatusChange = (status) => {
+    setSelectedStatus(status);
   };
 
   // Toggle address details
@@ -92,22 +108,54 @@ const Opportunities = () => {
   // Handle opportunity submission
   const handleSubmitOpportunity = async (opportunityData) => {
     try {
+      const userId = localStorage.getItem('userId');
+      if (!userId) {
+        setError('User ID not found. Please log in again.');
+        return;
+      }
+
       if (isEditing) {
         // Update existing opportunity
         const response = await axios.put(
           `http://localhost:5001/api/opportunities/${opportunityData._id}`,
-          opportunityData
+          { ...opportunityData, requesterId: userId }
         );
-        setOpportunities(opportunities.map(opp => 
-          opp._id === opportunityData._id ? response.data : opp
-        ));
+        
+        if (response.data) {
+          setOpportunities(opportunities.map(opp => 
+            opp._id === opportunityData._id ? response.data : opp
+          ));
+          setError(null);
+        }
       } else {
-        // Add new opportunity to the list
-        setOpportunities([...opportunities, opportunityData]);
+        // Create new opportunity
+        const formData = new FormData();
+        
+        // Add all fields to formData
+        Object.keys(opportunityData).forEach(key => {
+          if (opportunityData[key] !== undefined) {
+            formData.append(key, opportunityData[key]);
+          }
+        });
+        
+        // Add creator ID
+        formData.append('createdBy', userId);
+        
+        const response = await axios.post('http://localhost:5001/api/opportunities', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        
+        if (response.data) {
+          setOpportunities([...opportunities, response.data]);
+          setError(null);
+        }
       }
+      setIsModalOpen(false);
     } catch (err) {
       console.error('Error handling opportunity submission:', err);
-      setError('Failed to save opportunity. Please try again.');
+      setError(`Failed to save opportunity: ${err.response?.data?.error || err.message}`);
     }
   };
 
@@ -115,16 +163,67 @@ const Opportunities = () => {
   const handleDeleteOpportunity = async (id) => {
     if (window.confirm('Are you sure you want to delete this opportunity?')) {
       try {
-        await axios.delete(`http://localhost:5001/api/opportunities/${id}`);
+        const userId = localStorage.getItem('userId');
+        const token = localStorage.getItem("token");
+        if (!userId) {
+          setError('User ID not found. Please log in again.');
+          return;
+
+        }
+        
+        await axios.delete(`http://localhost:5001/api/admin/opportunities/${id}`, {
+          data: { requesterId: userId },
+          headers:{
+            Authorization:`Bearer ${token}`
+          }
+        });
+        
         setOpportunities(opportunities.filter(opp => opp._id !== id));
+        setError(null);
       } catch (err) {
         console.error('Error deleting opportunity:', err);
-        setError('Failed to delete opportunity. Please try again.');
+        setError(`Failed to delete opportunity: ${err.response?.data?.error || err.message}`);
       }
     }
   };
 
-  // Filter opportunities based on search, category, and district
+  // Cancel opportunity
+  const handleCancelOpportunity = async (id) => {
+    if (window.confirm('Are you sure you want to cancel this opportunity?')) {
+      try {
+        const userId = localStorage.getItem('userId');
+        const token = localStorage.getItem("token");
+
+        if (!userId) {
+          setError('User ID not found. Please log in again.');
+          return;
+        }
+        
+        await axios.put(`http://localhost:5001/api/admin/opportunities/
+          ${id}/cancel`, {
+          requesterId: userId, headers:{
+            Authorization:`Bearer ${token}`
+          }
+        });
+        
+        // Update the opportunity in the state
+        setOpportunities(opportunities.map(opp => 
+          opp._id === id ? { ...opp, status: 'Canceled' } : opp
+        ));
+        setError(null);
+      } catch (err) {
+        console.error('Error canceling opportunity:', err);
+        setError(`Failed to cancel opportunity: ${err.response?.data?.error || err.message}`);
+      }
+    }
+  };
+
+  // Retry loading opportunities
+  const handleRetryLoading = () => {
+    window.location.reload();
+  };
+
+  // Filter opportunities based on search, category, district, and status
   const filteredOpportunities = opportunities.filter(opportunity => {
     const matchesSearch = opportunity.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           opportunity.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -136,13 +235,21 @@ const Opportunities = () => {
     const matchesDistrict = selectedDistrict === 'All' || 
                             (opportunity.address && opportunity.address.district === selectedDistrict);
     
-    return matchesSearch && matchesCategory && matchesDistrict;
+    const matchesStatus = selectedStatus === 'All' || opportunity.status === selectedStatus;
+    
+    return matchesSearch && matchesCategory && matchesDistrict && matchesStatus;
   });
 
   // Format date
   const formatDate = (dateString) => {
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString(undefined, options);
+    if (!dateString) return '';
+    
+    try {
+      const options = { year: 'numeric', month: 'long', day: 'numeric' };
+      return new Date(dateString).toLocaleDateString(undefined, options);
+    } catch (e) {
+      return dateString;
+    }
   };
 
   // Format time
@@ -158,6 +265,35 @@ const Opportunities = () => {
       return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
     } catch (e) {
       return timeString;
+    }
+  };
+
+  // Check if opportunity date has passed
+  const isOpportunityPassed = (dateString) => {
+    if (!dateString) return false;
+    
+    try {
+      const currentDate = new Date();
+      const opportunityDate = new Date(dateString);
+      return currentDate > opportunityDate;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Get status badge color
+  const getStatusBadgeColor = (status) => {
+    switch (status) {
+      case 'Open':
+        return 'bg-green-100 text-green-800';
+      case 'Filled':
+        return 'bg-blue-100 text-blue-800';
+      case 'Completed':
+        return 'bg-gray-100 text-gray-800';
+      case 'Canceled':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -187,7 +323,7 @@ const Opportunities = () => {
                 className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              </div>
+            </div>
             
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="w-full sm:w-auto">
@@ -213,6 +349,18 @@ const Opportunities = () => {
                   ))}
                 </select>
               </div>
+              
+              <div className="w-full sm:w-auto">
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                >
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -222,7 +370,16 @@ const Opportunities = () => {
             <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
           </div>
         ) : error ? (
-          <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-6">{error}</div>
+          <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-6">
+            <h3 className="font-bold">Error Loading Opportunities</h3>
+            <p>{error}</p>
+            <button 
+              onClick={handleRetryLoading} 
+              className="mt-2 bg-red-600 text-white px-4 py-2 rounded-lg"
+            >
+              Try Again
+            </button>
+          </div>
         ) : filteredOpportunities.length === 0 ? (
           <div className="bg-yellow-50 p-6 rounded-lg text-center">
             <p className="text-lg text-gray-600">No opportunities found matching your criteria.</p>
@@ -230,29 +387,51 @@ const Opportunities = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredOpportunities.map((opportunity) => (
-              <div key={opportunity._id} className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-100 hover:shadow-lg transition-shadow duration-200">
+              <div key={opportunity._id} className={`bg-white rounded-lg shadow-md overflow-hidden border border-gray-100 hover:shadow-lg transition-shadow duration-200 ${opportunity.status === 'Completed' ? 'opacity-75' : ''}`}>
                 {opportunity.imageUrl && (
-                  <div className="w-full h-48 overflow-hidden">
+                  <div className="w-full h-48 overflow-hidden relative">
                     <img 
                       src={opportunity.imageUrl} 
                       alt={opportunity.title} 
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'https://via.placeholder.com/400x200?text=Image+Not+Available';
+                      }}
                     />
+                    <div className="absolute top-2 right-2">
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(opportunity.status)}`}>
+                        {opportunity.status}
+                      </span>
+                    </div>
                   </div>
                 )}
                 <div className="p-6">
                   <div className="flex justify-between items-start mb-3">
                     <h3 className="text-xl font-bold text-gray-800 mb-2">{opportunity.title}</h3>
                     <div className="flex space-x-2">
-                      <button 
-                        onClick={() => handleEditOpportunity(opportunity)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <FaEdit />
-                      </button>
+                      {opportunity.status !== 'Completed' && opportunity.status !== 'Canceled' && (
+                        <>
+                          <button 
+                            onClick={() => handleEditOpportunity(opportunity)}
+                            className="text-blue-600 hover:text-blue-800"
+                            title="Edit opportunity"
+                          >
+                            <FaEdit />
+                          </button>
+                          <button 
+                            onClick={() => handleCancelOpportunity(opportunity._id)}
+                            className="text-yellow-600 hover:text-yellow-800"
+                            title="Cancel opportunity"
+                          >
+                            <FaTimesCircle />
+                          </button>
+                        </>
+                      )}
                       <button 
                         onClick={() => handleDeleteOpportunity(opportunity._id)}
                         className="text-red-600 hover:text-red-800"
+                        title="Delete opportunity"
                       >
                         <FaTrash />
                       </button>
@@ -285,7 +464,12 @@ const Opportunities = () => {
                   
                   <div className="flex items-center text-gray-600 mb-2">
                     <FaCalendarAlt className="mr-2 text-purple-500" />
-                    <span>{formatDate(opportunity.date)}</span>
+                    <span className={isOpportunityPassed(opportunity.date) ? 'line-through' : ''}>
+                      {formatDate(opportunity.date)}
+                    </span>
+                    {isOpportunityPassed(opportunity.date) && (
+                      <span className="ml-2 text-xs text-gray-500">(Past)</span>
+                    )}
                   </div>
                   
                   <div className="flex items-center text-gray-600 mb-2">
@@ -299,7 +483,17 @@ const Opportunities = () => {
                   
                   <div className="flex items-center text-gray-600 mb-2">
                     <FaUsers className="mr-2 text-indigo-500" />
-                    <span>{opportunity.volunteers || opportunity.volunteersNeeded || 0} volunteers needed</span>
+                    <span>{opportunity.volunteers || 0} volunteers needed</span>
+                  </div>
+                  
+                  <div className="flex items-center text-gray-600 mb-2">
+                    <FaUserCheck className="mr-2 text-teal-500" />
+                    <span>{opportunity.appliedVolunteers || 0} volunteers confirmed</span>
+                    {opportunity.appliedVolunteers >= opportunity.volunteers && (
+                      <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                        Filled
+                      </span>
+                    )}
                   </div>
                   
                   <div className="flex items-center text-gray-600 mb-4">
@@ -346,7 +540,7 @@ const Opportunities = () => {
           isOpen={isModalOpen}
           onClose={handleCloseModal}
           onSubmit={handleSubmitOpportunity}
-          editData={editingData}
+          initialData={editingData}
           isEditing={isEditing}
           categories={categories.filter(cat => cat !== 'All')}
           districts={tnDistricts.filter(district => district !== 'All')}

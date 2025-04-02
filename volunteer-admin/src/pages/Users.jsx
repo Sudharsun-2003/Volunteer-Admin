@@ -15,16 +15,31 @@ const Users = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchUserId, setSearchUserId] = useState('');
+  const [filteredUsers, setFilteredUsers] = useState([]);
 
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    // Filter users whenever searchUserId or users array changes
+    if (searchUserId.trim() === '') {
+      setFilteredUsers(users);
+    } else {
+      const filtered = users.filter(user => 
+        user.userid && user.userid.toLowerCase().includes(searchUserId.toLowerCase())
+      );
+      setFilteredUsers(filtered);
+    }
+  }, [searchUserId, users]);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
       const response = await axios.get('http://localhost:5001/api/users/');
       setUsers(response.data);
+      setFilteredUsers(response.data);
       setError(null);
     } catch (err) {
       setError('Failed to fetch users');
@@ -92,6 +107,14 @@ const Users = () => {
     });
   };
 
+  const handleSearchChange = (e) => {
+    setSearchUserId(e.target.value);
+  };
+
+  const clearSearch = () => {
+    setSearchUserId('');
+  };
+
   if (loading && users.length === 0) {
     return <div className="text-center py-8">Loading users...</div>;
   }
@@ -110,6 +133,35 @@ const Users = () => {
         >
           Add User
         </button>
+      </div>
+
+      {/* Improved Search Box */}
+      <div className="mb-6">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search by User ID"
+            value={searchUserId}
+            onChange={handleSearchChange}
+            className="px-4 py-2 pr-10 border border-gray-300 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          {searchUserId && (
+            <button
+              onClick={clearSearch}
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+              aria-label="Clear search"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {searchUserId && (
+          <div className="mt-2 text-sm text-gray-600">
+            Found {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} matching "{searchUserId}"
+          </div>
+        )}
       </div>
 
       {/* Users Table */}
@@ -138,29 +190,37 @@ const Users = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {users.map((user) => (
-              <tr key={user._id}>
-                <td className="px-6 py-4 whitespace-nowrap">{user.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap">{user.emailid}</td>
-                <td className="px-6 py-4 whitespace-nowrap">{user.district || user.location}</td>
-                <td className="px-6 py-4 whitespace-nowrap">{user.skill}</td>
-                <td className="px-6 py-4 whitespace-nowrap">{user.userid}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button
-                    onClick={() => handleEdit(user)}
-                    className="text-indigo-600 hover:text-indigo-900 mr-4"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(user._id)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    Delete
-                  </button>
+            {filteredUsers.length > 0 ? (
+              filteredUsers.map((user) => (
+                <tr key={user._id}>
+                  <td className="px-6 py-4 whitespace-nowrap">{user.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{user.emailid}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{user.district || user.location}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{user.skill}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{user.userid}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => handleEdit(user)}
+                      className="text-indigo-600 hover:text-indigo-900 mr-4"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(user._id)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                  No users found matching the search criteria
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
