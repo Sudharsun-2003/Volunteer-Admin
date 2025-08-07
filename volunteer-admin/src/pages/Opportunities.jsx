@@ -38,7 +38,7 @@ const Opportunities = () => {
       try {
         setLoading(true);
         console.log('Attempting to fetch opportunities...');
-        const response = await axios.get('http://localhost:5001/api/opportunities');
+        const response = await axios.get('https://volunteer-backend-egrn.onrender.com/api/opportunities');
         console.log('Response received:', response);
         if (response.data && Array.isArray(response.data)) {
           setOpportunities(response.data);
@@ -117,7 +117,7 @@ const Opportunities = () => {
       if (isEditing) {
         // Update existing opportunity
         const response = await axios.put(
-          `http://localhost:5001/api/opportunities/${opportunityData._id}`,
+          `https://volunteer-backend-egrn.onrender.com/api/opportunities/${opportunityData._id}`,
           { ...opportunityData, requesterId: userId }
         );
         
@@ -141,7 +141,7 @@ const Opportunities = () => {
         // Add creator ID
         formData.append('createdBy', userId);
         
-        const response = await axios.post('http://localhost:5001/api/opportunities', formData, {
+        const response = await axios.post('https://volunteer-backend-egrn.onrender.com/api/opportunities', formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
@@ -171,7 +171,7 @@ const Opportunities = () => {
 
         }
         
-        await axios.delete(`http://localhost:5001/api/admin/opportunities/${id}`, {
+        await axios.delete(`https://volunteer-backend-egrn.onrender.com/api/admin/opportunities/${id}`, {
           data: { requesterId: userId },
           headers:{
             Authorization:`Bearer ${token}`
@@ -199,7 +199,7 @@ const Opportunities = () => {
           return;
         }
         
-        await axios.put(`http://localhost:5001/api/admin/opportunities/
+        await axios.put(`https://volunteer-backend-egrn.onrender.com/api/admin/opportunities/
           ${id}/cancel`, {
           requesterId: userId, headers:{
             Authorization:`Bearer ${token}`

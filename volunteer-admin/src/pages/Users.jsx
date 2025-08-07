@@ -37,7 +37,7 @@ const Users = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5001/api/users/');
+      const response = await axios.get('https://volunteer-backend-egrn.onrender.com/api/users/');
       setUsers(response.data);
       setFilteredUsers(response.data);
       setError(null);
@@ -54,10 +54,10 @@ const Users = () => {
     try {
       if (selectedUser) {
         // Update existing user
-        await axios.put(`http://localhost:5001/api/users/${selectedUser._id}`, formData);
+        await axios.put(`https://volunteer-backend-egrn.onrender.com/api/users/${selectedUser._id}`, formData);
       } else {
         // Add new user
-        await axios.post('http://localhost:5001/api/users/register', formData);
+        await axios.post('https://volunteer-backend-egrn.onrender.com/api/users/register', formData);
       }
       fetchUsers(); // Refresh the user list
       handleCloseModal();
@@ -70,7 +70,7 @@ const Users = () => {
   const handleDelete = async (userId) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
-        await axios.delete(`http://localhost:5001/api/users/${userId}`);
+        await axios.delete(`https://volunteer-backend-egrn.onrender.com/api/users/${userId}`);
         fetchUsers(); // Refresh the user list
       } catch (err) {
         console.error('Error deleting user:', err);

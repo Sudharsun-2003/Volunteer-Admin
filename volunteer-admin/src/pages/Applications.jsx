@@ -14,7 +14,7 @@ const AdminApplicationsPanel = () => {
   const [categories, setCategories] = useState([]);
 
   // Update API base URL
-  const API_BASE_URL = 'http://localhost:5001/api';
+  const API_BASE_URL = 'https://volunteer-backend-egrn.onrender.com/api';
 
   useEffect(() => {
     fetchAllApplications();

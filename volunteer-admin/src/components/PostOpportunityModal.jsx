@@ -143,7 +143,7 @@ const PostOpportunityModal = ({ isOpen, onClose, onSubmit, initialData, isEditin
           
           // Upload the new image
           const imageResponse = await axios.post(
-            'http://localhost:5001/api/upload', 
+            'https://volunteer-backend-egrn.onrender.com/api/upload', 
             imageFormData
           );
           
@@ -157,7 +157,7 @@ const PostOpportunityModal = ({ isOpen, onClose, onSubmit, initialData, isEditin
           };
           
           const response = await axios.put(
-            `http://localhost:5001/api/opportunities/${formData._id}`,
+            `https://volunteer-backend-egrn.onrender.com/api/opportunities/${formData._id}`,
             updatedOpportunity
           );
           
@@ -165,7 +165,7 @@ const PostOpportunityModal = ({ isOpen, onClose, onSubmit, initialData, isEditin
         } else {
           // If no new image, just update the other fields
           const response = await axios.put(
-            `http://localhost:5001/api/opportunities/${formData._id}`,
+            `https://volunteer-backend-egrn.onrender.com/api/opportunities/${formData._id}`,
             submissionData
           );
           
@@ -194,7 +194,7 @@ const PostOpportunityModal = ({ isOpen, onClose, onSubmit, initialData, isEditin
         
         // Make the API call
         const response = await axios.post(
-          'http://localhost:5001/api/opportunities',
+          'https://volunteer-backend-egrn.onrender.com/api/opportunities',
           newOpportunityData,
           {
             headers: {
